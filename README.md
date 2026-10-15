@@ -80,7 +80,7 @@ Your Store ID and API key are available in your Coinsnap merchant account.
 ## Resources
 
 - [Coinsnap JTL-Shop demo store](https://jtl.coinsnap.org/)
-- [Coinsnap for JTL-Shop article](https://coinsnap.io/en/coinsnap-for-jtl-store/)
+- [Coinsnap for JTL-Shop article](https://coinsnap.io/shop-systems/jtl-store/)
 - [Coinsnap Wallet](https://coinsnap.io/wallet/)
 - [Coinsnap API documentation](https://docs.coinsnap.io/)
 - [Coinsnap merchant account](https://app.coinsnap.io/register)

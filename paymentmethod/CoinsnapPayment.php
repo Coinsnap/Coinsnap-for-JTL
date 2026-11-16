@@ -93,7 +93,7 @@ class CoinsnapPayment extends Method
         }
 
         $store_id = $this->getSetting('store_id') ?? '';
-        $api_key = $this->getSetting('api_key') ?? '';
+        $api_key = $this->getApiKey();
 
         return parent::isValidIntern($args_arr) && $api_key !== '' && $store_id !== '';
     }
@@ -413,9 +413,10 @@ class CoinsnapPayment extends Method
         return $this->getSetting('store_id');
     }
 
-    public function getApiKey()
+    // Kept in the plugin's own settings as a JTL "encrypted" setting since 1.0.4.
+    public function getApiKey(): string
     {
-        return $this->getSetting('api_key');
+        return (string) ($this->plugin->getConfig()->getDecryptedValue('coinsnap_api_key') ?? '');
     }
 
     public function getApiUrl()

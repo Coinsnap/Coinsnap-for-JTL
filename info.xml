@@ -6,10 +6,20 @@
     <URL>https://coinsnap.io</URL>
     <PluginID>jtl_coinsnappayment</PluginID>
     <XMLVersion>100</XMLVersion>
-    <ShopVersion>5.2.3</ShopVersion>
+    <ShopVersion>5.7.0</ShopVersion>
     <Version>1.0.4</Version>    
     <CreateDate>2025-05-09</CreateDate>
     <Install>
+        <Adminmenu>
+            <Settingslink sort="1">
+                <Name>Settings</Name>
+                <Setting type="encrypted" initialValue="" sort="1" conf="Y">
+                    <Name>Coinsnap API Key</Name>
+                    <Description>Stored encrypted and never shown again. Leave empty to keep the saved key.</Description>
+                    <ValueName>coinsnap_api_key</ValueName>
+                </Setting>
+            </Settingslink>
+        </Adminmenu>
         <PaymentMethod>
             <Method>
                 <Name>Coinsnap Payment</Name>
@@ -30,11 +40,6 @@
                       <Name>Store ID</Name>
                       <Description>Please enter your Coinsnap Store ID.</Description>
                       <ValueName>store_id</ValueName>
-                  </Setting>
-                  <Setting type="password" initialValue="" sort="2" conf="Y">
-                      <Name>API Key</Name>
-                      <Description>Please enter your Coinsnap API Key.</Description>
-                      <ValueName>api_key</ValueName>
                   </Setting>
                 <MethodLanguage iso="GER">
                     <Name>Coinsnap Zahlung</Name>

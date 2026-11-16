@@ -31,7 +31,7 @@
                       <Description>Please enter your Coinsnap Store ID.</Description>
                       <ValueName>store_id</ValueName>
                   </Setting>
-                  <Setting type="text" initialValue="" sort="2" conf="Y">
+                  <Setting type="password" initialValue="" sort="2" conf="Y">
                       <Name>API Key</Name>
                       <Description>Please enter your Coinsnap API Key.</Description>
                       <ValueName>api_key</ValueName>

@@ -132,6 +132,7 @@ Use the support area in your Coinsnap merchant account or join the official [Coi
 ## Changelog
 
 ### 1.0.4
+* Security: The API key setting is a password field, so it is masked in the admin.
 
 - Security: Webhooks are verified with the timestamped `X-Coinsnap-Signature` header. Before, the webhook endpoint accepted any request, and a request saying "Settled" marked the order paid without any payment.
 - Security: An order is marked paid only when the Coinsnap API reports the invoice as settled, for an invoice this plugin created for that order, with the amount and currency it asked for, and only once. Paid, shipped or cancelled orders are not changed.

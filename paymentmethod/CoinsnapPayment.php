@@ -192,7 +192,9 @@ class CoinsnapPayment extends Method
             $return_url = $this->getNotificationURL($paymentHash);
         }
 
-        $amount = (float)$order->fGesamtsumme * $_SESSION['Waehrung']->fFaktor;
+        // The order's own currency factor: the session currency can differ (e.g. "pay again" after switching currency).
+        $factor = (float) ($order->fWaehrungsFaktor ?? 0) > 0 ? (float) $order->fWaehrungsFaktor : (float) ($order->Waehrung->fFaktor ?? 1);
+        $amount = (float)$order->fGesamtsumme * $factor;
         $currency = strtoupper($order->Waehrung->cISO);
         $buyerEmail = $order->oRechnungsadresse->cMail;
         $buyerName = $order->oRechnungsadresse->cVorname . ' ' . $order->oRechnungsadresse->cNachname;

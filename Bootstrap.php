@@ -28,6 +28,18 @@ class Bootstrap extends Bootstrapper
         }
     }
 
+    // After an update, register a webhook whose secret is stored; versions before 1.0.4 did not keep it.
+    public function updated($oldVersion, $newVersion): void
+    {
+        parent::updated($oldVersion, $newVersion);
+        foreach ($this->getPlugin()->getPaymentMethods()->getMethods() as $paymentMethod) {
+            $method = Method::create($paymentMethod->getModuleID());
+            if ($method instanceof CoinsnapPayment && $method->isValidIntern()) {
+                $method->ensureWebhook();
+            }
+        }
+    }
+
     /**
      * @return void
      */

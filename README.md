@@ -131,6 +131,14 @@ Use the support area in your Coinsnap merchant account or join the official [Coi
 
 ## Changelog
 
+### 1.0.4
+
+- Security: Webhooks are verified with the timestamped `X-Coinsnap-Signature` header. Before, the webhook endpoint accepted any request, and a request saying "Settled" marked the order paid without any payment.
+- Security: An order is marked paid only when the Coinsnap API reports the invoice as settled, for an invoice this plugin created for that order, with the amount and currency it asked for, and only once. Paid, shipped or cancelled orders are not changed.
+- Security: The webhook secret is stored and checked. After updating, the plugin registers a new webhook and removes the old one.
+- Fix: Every error reply from the Coinsnap API ended in a fatal "class not found" error, because the library loader could not load `CoinsnapException`.
+- Fix: A failed invoice creation shows an error instead of crashing, and a payment server outage no longer registers duplicate webhooks.
+
 ### 1.0.3 — 2025-05-09
 
 - Current plugin version according to `info.xml`.

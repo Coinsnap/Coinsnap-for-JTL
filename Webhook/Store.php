@@ -75,7 +75,7 @@ class Store
         return is_array($row) && $row !== [] ? $row : null;
     }
 
-    // Orders placed before 1.0.4 have no rows.
+    // Orders placed before 1.1.0 have no rows.
     public function orderHasInvoices(string $orderNo): bool
     {
         $row = $this->db->queryPrepared(

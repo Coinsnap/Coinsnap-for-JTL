@@ -321,7 +321,7 @@ class CoinsnapPayment extends Method
             $this->logSecurity('invoice not created for this order', $invoiceId);
             return null;
         }
-        // Orders placed before 1.0.4 have no record; check against what was sent then.
+        // Orders placed before 1.1.0 have no record; check against what was sent then.
         $expected ??= [
             'amount' => number_format((float) $order->fGesamtsumme * (float) ($order->fWaehrungsFaktor ?: 1), 2, '.', ''),
             'currency' => strtoupper((string) ($order->Waehrung->cISO ?? '')),
@@ -413,7 +413,7 @@ class CoinsnapPayment extends Method
         return $this->getSetting('store_id');
     }
 
-    // Kept in the plugin's own settings as a JTL "encrypted" setting since 1.0.4.
+    // Kept in the plugin's own settings as a JTL "encrypted" setting since 1.1.0.
     public function getApiKey(): string
     {
         return (string) ($this->plugin->getConfig()->getDecryptedValue('coinsnap_api_key') ?? '');

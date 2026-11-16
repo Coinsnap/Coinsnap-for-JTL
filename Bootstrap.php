@@ -28,7 +28,7 @@ class Bootstrap extends Bootstrapper
         }
     }
 
-    // After an update, register a webhook whose secret is stored; versions before 1.0.4 did not keep it.
+    // After an update, register a webhook whose secret is stored; versions before 1.1.0 did not keep it.
     public function updated($oldVersion, $newVersion): void
     {
         parent::updated($oldVersion, $newVersion);
@@ -41,7 +41,7 @@ class Bootstrap extends Bootstrapper
         }
     }
 
-    // Before 1.0.4 the key was a plain payment method setting. JTL carries old values over on update,
+    // Before 1.1.0 the key was a plain payment method setting. JTL carries old values over on update,
     // so it is still there: encrypt it into the plugin setting and remove the plain copy.
     private function moveApiKeyToEncryptedSetting(): void
     {

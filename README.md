@@ -23,9 +23,9 @@ Coinsnap is **Bitcoin payment software for merchants** and a brand of **Onlinesh
 
 ## Requirements
 
-The current plugin version is **1.0.4**.
+The current plugin version is **1.1.0**.
 
-The minimum supported JTL-Shop version is **5.7.0**. Version 1.0.4 stores the API key with JTL's encrypted plugin setting, which JTL-Shop added in 5.7.0. Shops on an older JTL-Shop version must update JTL-Shop first, or stay on plugin version 1.0.3.
+The minimum supported JTL-Shop version is **5.7.0**. Version 1.1.0 stores the API key with JTL's encrypted plugin setting, which JTL-Shop added in 5.7.0. Shops on an older JTL-Shop version must update JTL-Shop first, or stay on plugin version 1.0.3.
 
 The plugin requires:
 
@@ -85,7 +85,7 @@ Your Store ID and API key are available in your Coinsnap merchant account.
 
 ### Updating from 1.0.3 or older
 
-Before 1.0.4 the API key was a plain payment-method setting. Updating the plugin moves it automatically into the encrypted plugin setting and deletes the plain copy, so nothing needs to be entered again. Check under **Plugins → JTL Coinsnap Payment → Settings** that a key is saved; if it is empty, enter your API key there.
+Before 1.1.0 the API key was a plain payment-method setting. Updating the plugin moves it automatically into the encrypted plugin setting and deletes the plain copy, so nothing needs to be entered again. Check under **Plugins → JTL Coinsnap Payment → Settings** that a key is saved; if it is empty, enter your API key there.
 
 ## Resources
 
@@ -141,7 +141,7 @@ Use the support area in your Coinsnap merchant account or join the official [Coi
 
 ## Changelog
 
-### 1.0.4
+### 1.1.0
 * Security: The API key is stored encrypted (JTL's encrypted plugin setting) and is never shown in the admin. It moved from the payment-method settings to the plugin's settings; updating moves an existing key automatically. Requires JTL-Shop 5.7.0 or newer.
 
 - Security: Webhooks are verified with the timestamped `X-Coinsnap-Signature` header. Before, the webhook endpoint accepted any request, and a request saying "Settled" marked the order paid without any payment.

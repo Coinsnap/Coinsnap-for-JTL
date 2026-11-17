@@ -20,10 +20,9 @@ class InvoiceDecision
         $additionalStatus = (string) ($invoice['additionalStatus'] ?? '');
 
         if ($status === 'Settled') {
-            $paidAmount = $isBtcpay ? ($invoice['amount'] ?? null) : ($invoice['invoiceAmount'] ?? $invoice['fiatAmount'] ?? null);
             $markedByHand = $isBtcpay && $additionalStatus === 'Marked';
 
-            return !$markedByHand && self::sameAmount($paidAmount, $invoice['currency'] ?? null, $expectedAmount, $expectedCurrency)
+            return !$markedByHand && self::invoiceIsFor($invoice, $isBtcpay, $expectedAmount, $expectedCurrency)
                 ? self::PAID
                 : self::MISMATCH;
         }
@@ -35,7 +34,15 @@ class InvoiceDecision
         };
     }
 
-    private static function sameAmount(mixed $paidAmount, mixed $paidCurrency, string $expectedAmount, string $expectedCurrency): bool
+    // The invoice asks for the expected amount in the expected currency (whatever its status).
+    public static function invoiceIsFor(array $invoice, bool $isBtcpay, string $expectedAmount, string $expectedCurrency): bool
+    {
+        $amount = $isBtcpay ? ($invoice['amount'] ?? null) : ($invoice['invoiceAmount'] ?? $invoice['fiatAmount'] ?? null);
+
+        return self::sameAmount($amount, $invoice['currency'] ?? null, $expectedAmount, $expectedCurrency);
+    }
+
+    public static function sameAmount(mixed $paidAmount, mixed $paidCurrency, string $expectedAmount, string $expectedCurrency): bool
     {
         $expected = self::toMinorUnits($expectedAmount);
         $paid = self::toMinorUnits($paidAmount);

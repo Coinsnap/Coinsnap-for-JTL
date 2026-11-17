@@ -98,27 +98,34 @@ class CoinsnapPayment extends Method
         return parent::isValidIntern($args_arr) && $api_key !== '' && $store_id !== '';
     }
 
-    /**
-     * @inheritDoc
-     */
+    // "Payment before order completion": JTL places the order only when this returns true.
+    // True only when the API reports the invoice paid or being paid, and it is the invoice created for this cart.
     public function finalizeOrder(Bestellung $order, string $hash, array $args): bool
     {
-        $invoiceId = $_SESSION['coinsnap']['response']['id'] ?? '';
+        $invoiceId = (string) ($_SESSION['coinsnap']['response']['id'] ?? '');
+        $tempOrderNo = (string) ($_SESSION['coinsnap']['order_no'] ?? '');
+        $recorded = ($invoiceId !== '' && $tempOrderNo !== '') ? $this->store()->findInvoice($invoiceId, $tempOrderNo) : null;
+        if ($recorded === null) {
+            return false;
+        }
+        // The cart must not have changed since the invoice was created.
+        [$amount, $currency] = $this->orderAmount($order);
+        if (!InvoiceDecision::sameAmount($amount, $currency, (string) $recorded['amount'], (string) $recorded['currency'])) {
+            $this->logInfo('cart changed after the invoice was created', $invoiceId);
+            return false;
+        }
 
         try {
-            $client = new \Coinsnap\Client\Invoice($this->getApiUrl(), $this->getApiKey());
-            $csinvoice = $client->getInvoice($this->getStoreId(), $invoiceId);
-            $status = $csinvoice->getData()['status'];
+            $invoice = (new \Coinsnap\Client\Invoice($this->getApiUrl(), $this->getApiKey()))->getInvoice($this->getStoreId(), $invoiceId)->getData();
         } catch (\Throwable $e) {
             return false;
         }
-        $_SESSION['coinsnap']['invoice_status'] = $status;
-        if ($status != 'Processing' && $status != 'Settled') {
+        $status = (string) ($invoice['status'] ?? '');
+        if (!in_array($status, ['Processing', 'Settled'], true) || !InvoiceDecision::invoiceIsFor($invoice, false, (string) $recorded['amount'], (string) $recorded['currency'])) {
             return false;
         }
-
-        $_SESSION['coinsnap']['response']['status'] = $status;
-        return $status === 'Processing' || $status === 'Settled';
+        $_SESSION['coinsnap']['invoice_status'] = $status;
+        return true;
     }
 
     /**
@@ -144,8 +151,19 @@ class CoinsnapPayment extends Method
     {
         $allowedStatuses = ['Processing', 'Settled'];
         if (isset($_SESSION['coinsnap']['invoice_status']) && in_array($_SESSION['coinsnap']['invoice_status'], $allowedStatuses)) {
+            $invoiceId = (string) ($_SESSION['coinsnap']['response']['id'] ?? '');
+            // The invoice was created for the temporary number of the order JTL has just placed. Only that call
+            // ("_" session hash, right after finalizeOrder()) may link it, and only to an order of the same total.
+            $tempOrderNo = (string) ($_SESSION['coinsnap']['order_no'] ?? '');
+            $recorded = ($invoiceId !== '' && $tempOrderNo !== '') ? $this->store()->findInvoice($invoiceId, $tempOrderNo) : null;
+            [$amount, $currency] = $this->orderAmount($order);
+            if (str_starts_with($hash, '_') && $recorded !== null && (string) $order->cBestellNr !== ''
+                && !$this->store()->orderHasInvoices((string) $order->cBestellNr)
+                && InvoiceDecision::sameAmount($amount, $currency, (string) $recorded['amount'], (string) $recorded['currency'])) {
+                $this->store()->moveInvoice($invoiceId, $tempOrderNo, (string) $order->cBestellNr);
+            }
             // The same checks as the webhook; whichever arrives first marks the order paid.
-            $this->settleFromApi($order, (string) ($_SESSION['coinsnap']['response']['id'] ?? ''));
+            $this->settleFromApi($order, $invoiceId);
             unset($_SESSION['coinsnap']);
             $orderHash = $this->generateHash($order);
             $redirectUrl = Shop::Container()->getLinkService()->getStaticRoute('bestellabschluss.php') . '?i=' . $orderHash;
@@ -192,10 +210,7 @@ class CoinsnapPayment extends Method
             $return_url = $this->getNotificationURL($paymentHash);
         }
 
-        // The order's own currency factor: the session currency can differ (e.g. "pay again" after switching currency).
-        $factor = (float) ($order->fWaehrungsFaktor ?? 0) > 0 ? (float) $order->fWaehrungsFaktor : (float) ($order->Waehrung->fFaktor ?? 1);
-        $amount = (float)$order->fGesamtsumme * $factor;
-        $currency = strtoupper($order->Waehrung->cISO);
+        [$amount, $currency] = $this->orderAmount($order);
         $buyerEmail = $order->oRechnungsadresse->cMail;
         $buyerName = $order->oRechnungsadresse->cVorname . ' ' . $order->oRechnungsadresse->cNachname;
         $invoice_no = $order->cBestellNr;
@@ -203,7 +218,7 @@ class CoinsnapPayment extends Method
         $checkoutOptions = new \Coinsnap\Client\InvoiceCheckoutOptions();
         $checkoutOptions->setRedirectURL($return_url);
         $client = new \Coinsnap\Client\Invoice($this->getApiUrl(), $this->getApiKey());
-        $camount = \Coinsnap\Util\PreciseNumber::parseFloat($amount, 2);
+        $camount = \Coinsnap\Util\PreciseNumber::parseString($amount);
 
         $metadata = [];
         $metadata['orderNumber'] = $invoice_no;
@@ -235,15 +250,27 @@ class CoinsnapPayment extends Method
 
         // Only this invoice, for this amount and currency, can pay the order.
         $this->store()->rememberInvoice((string) $invoiceData['id'], (string) $invoice_no, $camount->__toString(), strtoupper($currency));
-        $_SESSION['coinsnap']['response'] = $invoiceData;
+        // Only for "payment before order completion", where the order does not exist yet; the records are in the database.
+        $_SESSION['coinsnap'] = ['response' => ['id' => (string) $invoiceData['id']], 'order_no' => (string) $invoice_no];
         \header('Location: ' . $invoiceData['checkoutLink']);
         exit;
+    }
+
+    // The order total in the order's own currency, with that order's currency factor: the session currency
+    // can differ (e.g. "pay again" after switching currency). Returns [amount with 2 decimals, ISO code].
+    public function orderAmount(Bestellung $order): array
+    {
+        $factor = (float) ($order->fWaehrungsFaktor ?? 0) > 0 ? (float) $order->fWaehrungsFaktor : (float) ($order->Waehrung->fFaktor ?? 1);
+        return [
+            number_format((float) $order->fGesamtsumme * $factor, 2, '.', ''),
+            strtoupper((string) ($order->Waehrung->cISO ?? '')),
+        ];
     }
 
     // Handles a webhook; returns the HTTP status. Only the invoice id is taken from the request.
     public function processWebhook(string $rawBody, string $signature): int
     {
-        $secret = (string) ($this->store()->webhook()['secret'] ?? '');
+        $secret = (string) ($this->store()->webhook((string) $this->getStoreId())['secret'] ?? '');
         $problem = Signature::coinsnapProblem($signature, $rawBody, $secret, time());
         if ($problem !== null) {
             $this->logSecurity($problem);
@@ -272,7 +299,7 @@ class CoinsnapPayment extends Method
             return 503;
         }
 
-        $order = $this->findOrder($invoice);
+        $order = $this->findOrder($invoiceId, $invoice);
         if ($order === null) {
             $this->logInfo('not ours', $invoiceId);
             return 200;
@@ -295,9 +322,10 @@ class CoinsnapPayment extends Method
     }
 
     // The order this plugin created the invoice for, or null when the invoice belongs to something else.
-    protected function findOrder(array $invoice): ?Bestellung
+    // The plugin's own record decides; the invoice's orderId is used only for orders placed before 1.1.0 (see decide()).
+    protected function findOrder(string $invoiceId, array $invoice): ?Bestellung
     {
-        $orderNo = $invoice['orderId'] ?? '';
+        $orderNo = $this->store()->orderNoForInvoice($invoiceId) ?? ($invoice['orderId'] ?? '');
         if (!is_string($orderNo) || $orderNo === '') {
             return null;
         }
@@ -319,15 +347,18 @@ class CoinsnapPayment extends Method
     {
         $orderNo = (string) $order->cBestellNr;
         $expected = $this->store()->findInvoice($invoiceId, $orderNo);
-        if ($expected === null && $this->store()->orderHasInvoices($orderNo)) {
-            $this->logSecurity('invoice not created for this order', $invoiceId);
-            return null;
+        if ($expected === null) {
+            // Orders placed before 1.1.0 have no record. They are accepted for a day after the upgrade, when every
+            // invoice opened before it has expired, and only for the invoice that names them; then never again.
+            if ($this->store()->orderHasInvoices($orderNo)
+                || ($invoice['orderId'] ?? null) !== $orderNo
+                || !$this->store()->legacyOrderAccepted((int) $order->kBestellung)) {
+                $this->logInfo('not ours', $invoiceId);
+                return null;
+            }
+            [$amount, $currency] = $this->orderAmount($order);
+            $expected = ['amount' => $amount, 'currency' => $currency];
         }
-        // Orders placed before 1.1.0 have no record; check against what was sent then.
-        $expected ??= [
-            'amount' => number_format((float) $order->fGesamtsumme * (float) ($order->fWaehrungsFaktor ?: 1), 2, '.', ''),
-            'currency' => strtoupper((string) ($order->Waehrung->cISO ?? '')),
-        ];
 
         $decision = InvoiceDecision::decide($invoice, false, (string) $expected['amount'], (string) $expected['currency']);
         if ($decision === InvoiceDecision::MISMATCH) {
@@ -344,11 +375,19 @@ class CoinsnapPayment extends Method
             $this->logInfo('no change from status ' . (int) $order->cStatus, $invoiceId);
             return;
         }
-        $expected = $this->store()->findInvoice($invoiceId, (string) $order->cBestellNr);
+        $orderNo = (string) $order->cBestellNr;
+        $expected = $this->store()->findInvoice($invoiceId, $orderNo);
         $amount = (string) ($expected['amount'] ?? ($invoice['invoiceAmount'] ?? ''));
         $currency = (string) ($expected['currency'] ?? ($invoice['currency'] ?? ''));
-        if (!$this->store()->claimPaid($invoiceId, (string) $order->cBestellNr, $amount, $currency)) {
+        // Whether the order is already paid comes from this plugin's records: Wawi moves paid orders back to "in progress".
+        $alreadyPaid = $this->store()->orderPaid($orderNo);
+        if (!$this->store()->claimPaid($invoiceId, $orderNo, $amount, $currency)) {
             $this->logInfo('already processed', $invoiceId);
+            return;
+        }
+        if ($alreadyPaid) {
+            // A second invoice of the same order was paid too: recorded above, the order is left as it is.
+            $this->logInfo('order already paid by another invoice, refund manually', $invoiceId);
             return;
         }
 
@@ -367,9 +406,6 @@ class CoinsnapPayment extends Method
         try {
             $invoice = (new \Coinsnap\Client\Invoice($this->getApiUrl(), $this->getApiKey()))->getInvoice($this->getStoreId(), $invoiceId)->getData();
         } catch (\Throwable $e) {
-            return;
-        }
-        if (($invoice['orderId'] ?? '') !== (string) $order->cBestellNr) {
             return;
         }
         if ($this->decide($order, $invoice, $invoiceId) === InvoiceDecision::PAID) {
@@ -435,7 +471,7 @@ class CoinsnapPayment extends Method
             }
         } catch (\Throwable $e) {
             // An API error is not "no webhook": registering now would replace a working secret.
-            return $this->store()->webhook() !== null;
+            return $this->store()->webhook((string) $this->getStoreId()) !== null;
         }
         return $this->registerWebhook();
     }
@@ -443,7 +479,7 @@ class CoinsnapPayment extends Method
     // Throws when the API can't be asked.
     public function webhookExists(): bool
     {
-        $stored = $this->store()->webhook();
+        $stored = $this->store()->webhook((string) $this->getStoreId());
         if ($stored === null) {
             return false;
         }
@@ -475,7 +511,7 @@ class CoinsnapPayment extends Method
         if (empty($webhook['id']) || empty($webhook['secret'])) {
             return false;
         }
-        $this->store()->saveWebhook((string) $webhook['id'], (string) $webhook['secret']);
+        $this->store()->saveWebhook((string) $this->getStoreId(), (string) $webhook['id'], (string) $webhook['secret']);
 
         // Older versions never stored their webhook's secret; remove those webhooks so only this one delivers.
         try {

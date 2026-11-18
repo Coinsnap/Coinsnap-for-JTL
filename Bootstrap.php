@@ -9,6 +9,9 @@ use JTL\Plugin\Bootstrapper;
 use JTL\Plugin\Payment\Method;
 use JTL\Shop;
 use Plugin\jtl_coinsnappayment\paymentmethod\CoinsnapPayment;
+use Plugin\jtl_coinsnappayment\Webhook\Store;
+
+require_once __DIR__ . '/Webhook/Store.php';
 
 /**
  * Class Bootstrap
@@ -33,11 +36,24 @@ class Bootstrap extends Bootstrapper
     {
         parent::updated($oldVersion, $newVersion);
         $this->moveApiKeyToEncryptedSetting();
+        if (\version_compare((string) $oldVersion, '1.1.0', '<')) {
+            // Orders placed before this update have no invoice record: accept them for one day only.
+            (new Store(Shop::Container()->getDB()))->startLegacyWindow();
+        }
         foreach ($this->getPlugin()->getPaymentMethods()->getMethods() as $paymentMethod) {
             $method = Method::create($paymentMethod->getModuleID());
             if ($method instanceof CoinsnapPayment && $method->isValidIntern()) {
                 $method->ensureWebhook();
             }
+        }
+    }
+
+    // The webhook secrets and invoice records live in tables JTL does not know about.
+    public function uninstalled(bool $deleteData = true)
+    {
+        parent::uninstalled($deleteData);
+        if ($deleteData) {
+            (new Store(Shop::Container()->getDB()))->dropTables();
         }
     }
 

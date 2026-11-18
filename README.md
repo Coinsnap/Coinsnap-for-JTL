@@ -147,6 +147,9 @@ Use the support area in your Coinsnap merchant account or join the official [Coi
 - Security: Webhooks are verified with the timestamped `X-Coinsnap-Signature` header. Before, the webhook endpoint accepted any request, and a request saying "Settled" marked the order paid without any payment.
 - Security: An order is marked paid only when the Coinsnap API reports the invoice as settled, for an invoice this plugin created for that order, with the amount and currency it asked for, and only once. Paid, shipped or cancelled orders are not changed.
 - Security: The webhook secret is stored and checked. After updating, the plugin registers a new webhook and removes the old one.
+- Security: Whether an order is already paid comes from the plugin's own invoice records, not from the order status, so a second paid invoice never pays an order twice (e.g. after JTL-Wawi set it back to "in progress"). Orders placed before the update, which have no invoice record, are accepted for one day after it.
+- Security: With "payment before order completion", the order is placed only for the invoice created for the unchanged cart, and the webhook then marks that order paid.
+- Security: The webhook secret is stored per Coinsnap store. Uninstalling the plugin with data removal deletes it and the invoice records.
 - Fix: Every error reply from the Coinsnap API ended in a fatal "class not found" error, because the library loader could not load `CoinsnapException`.
 - Fix: A failed invoice creation shows an error instead of crashing, and a payment server outage no longer registers duplicate webhooks.
 

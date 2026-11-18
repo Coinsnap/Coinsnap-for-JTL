@@ -28,7 +28,7 @@ class CurlClient implements ClientInterface
     }
 
     /**
-     * Use this method if you need to set any special parameters like disable CURLOPT_SSL_VERIFYHOST and CURLOPT_SSL_VERIFYPEER.
+     * Extra cURL options. Never turn off CURLOPT_SSL_VERIFYPEER or CURLOPT_SSL_VERIFYHOST: a fake "paid" invoice could then be sent back.
      * @return void
      */
     public function setCurlOptions(array $options)
@@ -54,6 +54,9 @@ class CurlClient implements ClientInterface
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        // A hanging API must not hang the checkout or the webhook (which then answers 503 and is retried).
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_HEADER, 1);
         if ($body !== '') {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $body);

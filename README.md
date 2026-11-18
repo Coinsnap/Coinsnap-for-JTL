@@ -23,13 +23,13 @@ Coinsnap is **Bitcoin payment software for merchants** and a brand of **Onlinesh
 
 ## Requirements
 
-The current plugin version is **1.0.3**.
+The current plugin version is **1.1.0**.
 
-According to the plugin metadata, the minimum supported JTL-Shop version is **5.2.3**.
+The minimum supported JTL-Shop version is **5.7.0**. Version 1.1.0 stores the API key with JTL's encrypted plugin setting, which JTL-Shop added in 5.7.0. Shops on an older JTL-Shop version must update JTL-Shop first, or stay on plugin version 1.0.3.
 
 The plugin requires:
 
-- **JTL-Shop 5.2.3 or newer**
+- **JTL-Shop 5.7.0 or newer**
 - **PHP 8.1 or newer**
 - A **Coinsnap merchant account**
 
@@ -40,8 +40,8 @@ For Bitcoin settlement, you can use a compatible Bitcoin or Lightning wallet. On
 1. Create a [Coinsnap merchant account](https://app.coinsnap.io/register).
 2. Download the Coinsnap for JTL-Shop plugin from this repository.
 3. Upload and install the plugin in the JTL-Shop plugin manager.
-4. Open the Coinsnap payment-method settings.
-5. Enter your Coinsnap **Store ID** and **API key**.
+4. Enter your Coinsnap **API key** in the plugin's settings (Plugins → JTL Coinsnap Payment → Settings).
+5. Enter your Coinsnap **Store ID** in the Coinsnap payment-method settings.
 6. Enable the Coinsnap payment method.
 7. Perform a test transaction before going live.
 
@@ -65,17 +65,27 @@ In the JTL-Shop administration:
 4. Select **JTL Coinsnap Payment**.
 5. Install and activate the plugin.
 
-### 3. Configure the payment method
+### 3. Enter your API key
+
+1. Go to **Plugins → JTL Coinsnap Payment → Settings**.
+2. Enter your **Coinsnap API Key** and save.
+
+JTL-Shop stores the key encrypted and never shows it again. To keep the saved key, leave the field empty when you save the settings; to replace it, enter the new key.
+
+### 4. Configure the payment method
 
 1. Go to the JTL-Shop payment-method settings.
 2. Find **Coinsnap Payment**.
 3. Open the settings.
 4. Enter your **Store ID**.
-5. Enter your **API key**.
-6. Configure the payment method name and other available options.
-7. Save the settings.
+5. Configure the payment method name and other available options.
+6. Save the settings.
 
 Your Store ID and API key are available in your Coinsnap merchant account.
+
+### Updating from 1.0.3 or older
+
+Before 1.1.0 the API key was a plain payment-method setting. Updating the plugin moves it automatically into the encrypted plugin setting and deletes the plain copy, so nothing needs to be entered again. Check under **Plugins → JTL Coinsnap Payment → Settings** that a key is saved; if it is empty, enter your API key there.
 
 ## Resources
 
@@ -93,7 +103,7 @@ Your Store ID and API key are available in your Coinsnap merchant account.
 
 ### What are the requirements for accepting Bitcoin in my JTL-Shop?
 
-You need JTL-Shop 5.2.3 or newer, PHP 8.1 or newer, and a Coinsnap merchant account. You do not need to operate your own Lightning node or Bitcoin payment server.
+You need JTL-Shop 5.7.0 or newer, PHP 8.1 or newer, and a Coinsnap merchant account. You do not need to operate your own Lightning node or Bitcoin payment server.
 
 ### Can customers pay with both Lightning and Bitcoin on-chain?
 
@@ -115,7 +125,7 @@ The plugin can be installed through the JTL-Shop plugin manager. Basic experienc
 
 ### Where do I find my Store ID and API key?
 
-They are available in your Coinsnap merchant account and are entered in the JTL-Shop Coinsnap payment-method configuration.
+They are available in your Coinsnap merchant account. The API key goes into the plugin's settings (**Plugins → JTL Coinsnap Payment → Settings**), the Store ID into the Coinsnap payment-method configuration.
 
 ### Does the plugin support payment before order completion?
 
@@ -130,6 +140,18 @@ Coinsnap is designed for merchants worldwide. Bitcoin and Lightning payments can
 Use the support area in your Coinsnap merchant account or join the official [Coinsnap Telegram channel](https://t.me/coinsnap).
 
 ## Changelog
+
+### 1.1.0
+* Security: The API key is stored encrypted (JTL's encrypted plugin setting) and is never shown in the admin. It moved from the payment-method settings to the plugin's settings; updating moves an existing key automatically. Requires JTL-Shop 5.7.0 or newer.
+
+- Security: Webhooks are verified with the timestamped `X-Coinsnap-Signature` header. Before, the webhook endpoint accepted any request, and a request saying "Settled" marked the order paid without any payment.
+- Security: An order is marked paid only when the Coinsnap API reports the invoice as settled, for an invoice this plugin created for that order, with the amount and currency it asked for, and only once. Paid, shipped or cancelled orders are not changed.
+- Security: The webhook secret is stored and checked. After updating, the plugin registers a new webhook and removes the old one.
+- Security: Whether an order is already paid comes from the plugin's own invoice records, not from the order status, so a second paid invoice never pays an order twice (e.g. after JTL-Wawi set it back to "in progress"). Orders placed before the update, which have no invoice record, are accepted for one day after it.
+- Security: With "payment before order completion", the order is placed only for the invoice created for the unchanged cart, and the webhook then marks that order paid.
+- Security: The webhook secret is stored per Coinsnap store. Uninstalling the plugin with data removal deletes it and the invoice records.
+- Fix: Every error reply from the Coinsnap API ended in a fatal "class not found" error, because the library loader could not load `CoinsnapException`.
+- Fix: A failed invoice creation shows an error instead of crashing, and a payment server outage no longer registers duplicate webhooks.
 
 ### 1.0.3 — 2025-05-09
 

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Plugin\jtl_coinsnappayment;
 
 use JTL\Plugin\Payment\LegacyMethod;
-use JTL\Checkout\Bestellung;
 use JTL\Plugin\Helper;
 use JTL\Shop;
+use Plugin\jtl_coinsnappayment\paymentmethod\CoinsnapPayment;
 
 require_once(__DIR__ . '/../library/autoload.php');
 
@@ -17,95 +17,33 @@ require_once(__DIR__ . '/../library/autoload.php');
 
 $bootstrapper = __DIR__ . '/../../../includes/globalinclude.php';
 
-$exit = static function ($error = false) {
+$reply = static function (int $status): void {
     \ob_end_clean();
-    \http_response_code(($error !== true) ? 200 : 503);
+    \http_response_code($status);
+    echo $status === 200 ? 'OK' : ($status === 401 ? 'Unauthorized' : 'Retry');
     exit;
 };
 
 if (!\file_exists($bootstrapper)) {
-    $exit(true);
+    $reply(503);
 }
 
 require_once $bootstrapper;
 
-$db = Shop::Container()->getDB();
-$logger = Shop::Container()->getLogService();
 $oPlugin = Helper::getPluginById('jtl_coinsnappayment');
-
 if ($oPlugin === null) {
     Shop::Container()->getLogService()->error("Coinsnap Notify: Plugin 'jtl_coinsnappayment' not found");
-    $exit(true);
+    $reply(503);
 }
 
-$payment = null;
-$moduleID   = 'kPlugin_' . $oPlugin->getID() . '_coinsnappayment';
-
-$payment = LegacyMethod::create($moduleID);
-if ($payment === null) {
-    Shop::Container()->getLogService()->debug('Coinsnap Notify: Missing payment provider');
-    $exit(true);
+$payment = LegacyMethod::create('kPlugin_' . $oPlugin->getID() . '_coinsnappayment');
+if (!$payment instanceof CoinsnapPayment) {
+    Shop::Container()->getLogService()->error('Coinsnap Notify: payment method not found');
+    $reply(503);
 }
 
-$store_id =  $payment->getSetting('store_id');
-$api_key =  $payment->getSetting('api_key');
-
-
-$notify_json = file_get_contents('php://input');
-
-$notify_ar = json_decode($notify_json, true);
-$invoice_id = $notify_ar['invoiceId'];
-$status = $notify_ar['type'];
-$ApiUrl = 'https://app.coinsnap.io';
-
-try {
-    $client = new \Coinsnap\Client\Invoice($ApiUrl, $api_key);
-    $csinvoice = $client->getInvoice($store_id, $invoice_id);
-    $order_no = $csinvoice->getData()['orderId'];
-} catch (\Throwable $e) {
-    echo "Error";
-    exit;
-}
-
-$data = Shop::Container()->getDB()->select(
-    'tbestellung',
-    'cBestellNr',
-    $order_no,
-    null,
-    null,
-    null,
-    null,
-    false,
-    'kBestellung'
-);
-
-$orderId = (int) $data->kBestellung;
-
-$order   = new Bestellung($orderId);
-
-$order->fuelleBestellung(false, 0, false);
-
-
-if ((int)$order->kBestellung === 0) {
-    Shop::Container()->getLogService()->error('Coinsnap Notify:' . $orderId . ' Missing payment provider');
-    echo 'Coinsnap Notify:' . $orderId . ' Missing payment provider';
-}
-
-// validation
-if (!\in_array((int)$order->cStatus, [\BESTELLUNG_STATUS_OFFEN, \BESTELLUNG_STATUS_IN_BEARBEITUNG], true)) {
-    // order status has already been set
-    $exit();
-}
-
-
-switch ($status) {
-    case 'Settled':
-        $payment->addIncomingPayment($order, (object)[
-            'cHinweis'         => $csinvoice->getData()['invoiceId'],
-        ]);
-        $payment->setOrderStatusToPaid($order);
-        $payment->sendConfirmationMail($order);
-        break;
-}
-echo "OK";
-exit;
+// Only the invoice id is taken from the request; the invoice's state comes from the Coinsnap API.
+$reply($payment->processWebhook(
+    (string) \file_get_contents('php://input'),
+    (string) ($_SERVER['HTTP_X_COINSNAP_SIGNATURE'] ?? '')
+));

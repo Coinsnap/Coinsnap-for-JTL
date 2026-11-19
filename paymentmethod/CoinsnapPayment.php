@@ -22,6 +22,7 @@ require_once(__DIR__ . '/../library/autoload.php');
 require_once(__DIR__ . '/../Webhook/Signature.php');
 require_once(__DIR__ . '/../Webhook/InvoiceDecision.php');
 require_once(__DIR__ . '/../Webhook/Store.php');
+require_once(__DIR__ . '/InvoiceMetadata.php');
 
 class CoinsnapPayment extends Method
 {
@@ -220,7 +221,8 @@ class CoinsnapPayment extends Method
         $client = new \Coinsnap\Client\Invoice($this->getApiUrl(), $this->getApiKey());
         $camount = \Coinsnap\Util\PreciseNumber::parseString($amount);
 
-        $metadata = [];
+        // orderId / orderNumber stay cBestellNr: findOrder() and decide() match orders placed before 1.1.0 by the invoice's orderId.
+        $metadata = $this->invoiceMetadata($order, (string) $invoice_no);
         $metadata['orderNumber'] = $invoice_no;
         $metadata['customerName'] = $buyerName;
         $metadata['paymentHash'] = $paymentHash;
@@ -254,6 +256,22 @@ class CoinsnapPayment extends Method
         $_SESSION['coinsnap'] = ['response' => ['id' => (string) $invoiceData['id']], 'order_no' => (string) $invoice_no];
         \header('Location: ' . $invoiceData['checkoutLink']);
         exit;
+    }
+
+    // Order, customer and line-item data for the invoice; a missing field never stops the checkout.
+    protected function invoiceMetadata(Bestellung $order, string $orderNo): array
+    {
+        $factor = (float) ($order->fWaehrungsFaktor ?? 0) > 0 ? (float) $order->fWaehrungsFaktor : (float) ($order->Waehrung->fFaktor ?? 1);
+        try {
+            $version = (string) $this->plugin->getMeta()->getVersion();
+        } catch (\Throwable $e) {
+            $version = '';
+        }
+        try {
+            return InvoiceMetadata::build($order, $orderNo, $factor, (string) ($_SESSION['cISOSprache'] ?? ''), $version);
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     // The order total in the order's own currency, with that order's currency factor: the session currency
